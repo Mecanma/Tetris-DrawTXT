@@ -2,6 +2,7 @@
 #define TETRISFUNC_H_INCLUDED
 
     #include "tetrisclass.h"
+    #include "interfaces.h"
 
     const int _H = 32, _W = 16;
     int X = 4, Y = 0;
@@ -17,7 +18,7 @@
 
     void rastrillar(const int &_W, const int &_H);//comprobar que se haya completado una linea
     void eliminar_linea(const int &linea);//eliminar una linea, solo va a ser llamada por la funcion "rastrillar"
-    void pintar_cuadricula();//pintará la cuadricula
+    void pintar_cuadricula();//pintarÃ¡ la cuadricula
     void movimiento(tetramino &T);//movimiento de la pieza que tiene el "foco"
     void desocupar_espacio(const int &X, const int &Y, const bool &foco = false);//desocupa un spacio en la cuadricula
     void ocupar_espacio(const int &X, const int &Y, const int &color, const bool &foco = false);
@@ -340,11 +341,11 @@
                 if(this->posiciones[current_pos][i][j] == true){//buscar el cuadrado
                     if(i + Y + direccionY > _H - 1 ||
                         j + X + direccionX < 1 ||
-                        j + X + direccionX > _W - 2)//verificar que no salga de área jugable
+                        j + X + direccionX > _W - 2)//verificar que no salga de Ã¡rea jugable
                             return valido = false;
 
                     if(cuadricula[j + X + direccionX][i + Y + direccionY].getFoco() == false &&
-                        cuadricula[j + X + direccionX][i + Y + direccionY].getOcupado() == true)//verificar que no haya colisión a la hora de moverse
+                        cuadricula[j + X + direccionX][i + Y + direccionY].getOcupado() == true)//verificar que no haya colisiÃ³n a la hora de moverse
                             return valido = false;
                     }
                 }
@@ -387,12 +388,12 @@
                 if(this->posiciones[aux][i][j] == true){//buscar el cuadrado
                     if(i + Y > _H - 1 ||
                         j + X < 1 ||
-                        j + X > _W - 2){//verificar que no salga de área jugable
+                        j + X > _W - 2){//verificar que no salga de Ã¡rea jugable
                             valido = false; break;
                             }
 
                     if(cuadricula[j + X][i + Y].getFoco() == false &&
-                        cuadricula[j + X][i + Y].getOcupado() == true){//verificar que no haya colisión a la hora de moverse
+                        cuadricula[j + X][i + Y].getOcupado() == true){//verificar que no haya colisiÃ³n a la hora de moverse
                             valido = false; break;
                             }
                     }
@@ -400,7 +401,7 @@
                 if(!valido) break;
             }
             if(valido){
-            desocupar_cuadricula(X, Y);//desocupar antes de la rotación
+            desocupar_cuadricula(X, Y);//desocupar antes de la rotaciÃ³n
                 current_pos = aux;
                 ocupar_cuadricula(X, Y, this->getColor());
             }
@@ -417,12 +418,12 @@
                         if(this->posiciones[aux][i][j] == true){//buscar el cuadrado
                             if(i + Y > _H - 1 ||
                                 j + X < 1 ||
-                                j + X > _W - 2){//verificar que no salga de área jugable
+                                j + X > _W - 2){//verificar que no salga de Ã¡rea jugable
                                     valido = false; break;
                                 }
 
                         if(cuadricula[j + X][i + Y].getFoco() == false &&
-                            cuadricula[j + X][i + Y].getOcupado() == true){//verificar que no haya colisión a la hora de moverse
+                            cuadricula[j + X][i + Y].getOcupado() == true){//verificar que no haya colisiÃ³n a la hora de moverse
                                 valido = false; break;
                                 }
                         }
@@ -430,7 +431,7 @@
                     if(!valido) break;
                 }
                 if(valido){
-                    desocupar_cuadricula(X, Y);//desocupar antes de la rotación
+                    desocupar_cuadricula(X, Y);//desocupar antes de la rotaciÃ³n
                     current_pos = aux;
                     ocupar_cuadricula(X, Y, this->getColor());
                 }
