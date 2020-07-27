@@ -1,11 +1,11 @@
-    #include "headers/drawtxt.h"
-    #include "headers/tetrisFunc.h"
-    #include "headers/Interfaces.h"
+    #include "drawtxt.h"
+    #include "tetrisFunc.h"
+    #include "Interfaces.h"
     #include <ctime>
     #include <cstdlib>
 
 
-    //La implementaciÛn de la funcion _lineax() y _lineay() est· basada en la implementacion
+    //La implementaci√≥n de la funcion _lineax() y _lineay() est√° basada en la implementacion
     //de la funcion lineax() de la libreria "drawtxt"
 
     int main(){
@@ -17,9 +17,9 @@
        while(1){
             int num = 1 + rand() % (7 + 1 - 1);
 
-            if(!pieza_punt)//primera iteraciÛn
+            if(!pieza_punt)//primera iteraci√≥n
                 pieza_punt = fabrica(1 + rand() % (7 + 1 - 1));
-            if(!pieza_punt_nxt)//dem·s iteraciones
+            if(!pieza_punt_nxt)//dem√°s iteraciones
                 pieza_punt_nxt = fabrica(num);
 
 
@@ -27,7 +27,7 @@
 
             movimiento(pieza_punt);//mover/rotar el tetramino
 
-            pintar_cuadricula();//pintar la cuadricula(pintar los tetraminos en el ·rea jugable)
+            pintar_cuadricula();//pintar la cuadricula(pintar los tetraminos en el √°rea jugable)
             GUI();//interfaz de juego
 
             if(Game_over){
