@@ -111,17 +111,18 @@ La librería seria el motor grafico usado para correr graficos en PixelDrawTXT.e
 
 #ifndef __dartxt_h__
 #define __dartxt_h__
+#include <stdio.h>
+#include <conio.h>
 #include <windows.h>
+#include <string>
 #include <vector>
-#include <ctime>
 #include <math.h>
-#include <cstdint>
-#include <stdint.h>
 #include <chrono>
-#include <typeinfo>
 #include <fstream>
-#define PI acos(-1)
+
 #pragma comment(lib, "winmm.lib")
+
+#define PI acos(-1)
 
 auto RENDER_FPS = 0;
 
@@ -153,84 +154,230 @@ private:
     timepoint_t m_start;
 };
 
-bool RENDER_INICIADO = false;
-const HANDLE wHnd = GetStdHandle(STD_OUTPUT_HANDLE);
-const HANDLE rHnd = GetStdHandle(STD_INPUT_HANDLE);
-SMALL_RECT windowSize;
-COORD characterBufferSize;
-COORD characterPosition = {0, 0};
-SMALL_RECT consoleWriteArea;
-CHAR_INFO consoleBuffer[MAXBYTE*MAXBYTE*2];
+struct ESTADOS_MOUSE{
+	bool bPressed;
+	bool bReleased;
+	bool bHeld;
+} m_mouse[5];
 
-int W_RENDER_DEQ2000;
-int H_RENDER_DEQ2000;
+struct MOTOR2D
+{
+public:
+	HANDLE wHnd;
+	HANDLE rHnd;
 
-struct ESTADOS_MOUSE
-  {
-    bool bPressed;
-    bool bReleased;
-    bool bHeld;
-  } m_mouse[5];
+	SMALL_RECT windowSize;
+	COORD characterBufferSize;
+	COORD characterPosition = {0, 0};
+	SMALL_RECT consoleWriteArea;
+	CHAR_INFO *consoleBuffer;
+	bool RENDER_INICIADO = false;
+	bool SALIR_CERRO_PRIMERO = false;
 
-  bool m_mouseOldState[5] = { 0 };
-  bool m_mouseNewState[5] = { 0 };
-  bool m_bConsoleInFocus = true;
+	int MOTOR2D_W;
+	int MOTOR2D_H;
 
-  int m_mousePosX;
-  int m_mousePosY;
+	int LINEATOX = 0;
+	int LINEATOY = 0;
+	int LINEATO = 0;
 
+	MOTOR2D(){}
+
+	~MOTOR2D(){
+		if(!SALIR_CERRO_PRIMERO){
+			printf("\t\tSeccion cerrada! por structura");
+			free(consoleBuffer);
+			CloseHandle(wHnd);
+			CloseHandle(rHnd);
+		}
+	}
+
+	void SETDIM(unsigned int W, unsigned int H){
+		char A[100];
+	    sprintf(A, "@mode %d,%d", W, H);
+	    system(A);
+	}
+
+	void FUENTE(unsigned int W, unsigned int H, bool FONT){
+		CONSOLE_FONT_INFOEX cfi;
+		cfi.cbSize = sizeof(cfi);
+		cfi.nFont = 0;
+	    cfi.dwFontSize.X = W;
+	    cfi.dwFontSize.Y = H;
+	    cfi.FontFamily = FF_DONTCARE;
+	    cfi.FontWeight = FW_NORMAL;
+
+	    if(FONT==0){
+	    	wcscpy_s(cfi.FaceName, L"Lucida");
+	    } else {
+	    	wcscpy_s(cfi.FaceName, L"Consolas");
+	    }
+	    if (!SetCurrentConsoleFontEx(wHnd, false, &cfi)){
+	    	printf("ERROR DE FUENTES....\n");
+	    	getch();
+	    }
+	}
+
+	void MOTOR2DPINTAR(float esperar = 0){
+		if (RENDER_INICIADO){
+			if(!SetConsoleMode(rHnd, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
+				return;
+			Mouse_Inputs();
+			Sleep(esperar);
+			WriteConsoleOutputA(wHnd, consoleBuffer, characterBufferSize, characterPosition, &consoleWriteArea);
+		} else {
+			printf("\rERROR NO INICIO PRIMERO LA FUNCION: iniciar(int W, int H, std::string TITULO = \"\", int FONT = 0,  int fontw = 8, int fonth = 8, bool Verificacion = 1);");
+			free(consoleBuffer);
+		}
+	}
+
+	void MOTOR2DSALIR(){
+		SALIR_CERRO_PRIMERO = true;
+		printf("\t\tSeccion cerrada! por funcion");
+		free(consoleBuffer);
+		CloseHandle(wHnd);
+		CloseHandle(rHnd);
+	}
+	// ###########################################
+	bool MOTOR2DINICIADO(int x, int y, int W, int H, std::string TITULO, int FONT,  int fontw, int fonth, bool Verificacion){
+		free(consoleBuffer);
+		RENDER_INICIADO = true;
+		if (RENDER_INICIADO)
+		{
+			characterPosition = {(short)x, (short)y};
+			wHnd = GetStdHandle(STD_OUTPUT_HANDLE);
+			rHnd = GetStdHandle(STD_INPUT_HANDLE);
+		}
+		SETDIM(W,H);
+		MOTOR2D_W = W;
+		MOTOR2D_H = H;
+		consoleBuffer = new CHAR_INFO[W * H];
+	    memset(consoleBuffer, 0, sizeof(CHAR_INFO) * W * H);
+		CONSOLE_CURSOR_INFO info; // ocultamos el cursor.
+		info.dwSize = 100;
+		info.bVisible = FALSE;
+		SetConsoleCursorInfo(wHnd, &info);
+		SetConsoleTitle((LPCSTR)TITULO.c_str());
+		windowSize = {(short)x, (short)y, (short)(W-1), (short)(H-1)};
+		characterBufferSize = {(short)W, (short)H};
+	    consoleWriteArea = {(short)x, (short)y, (short int)(W-1), (short int)(H-1)};
+		if (!SetConsoleActiveScreenBuffer(wHnd)){ MOTOR2DSALIR(); }
+		FUENTE(fontw,fonth, FONT);
+	    return RENDER_INICIADO;
+	}
+
+	bool m_mouseOldState[5] = { 0 };
+	bool m_mouseNewState[5] = { 0 };
+	bool m_bConsoleInFocus = true;
+
+	int m_mousePosX;
+	int m_mousePosY;
+
+	void Mouse_Inputs(){
+		INPUT_RECORD inBuf[32];
+		DWORD events = 0;
+		GetNumberOfConsoleInputEvents(rHnd, &events);
+		if (events > 0)
+			ReadConsoleInput(rHnd, inBuf, events, &events);
+		for (DWORD i = 0; i < events; i++){
+			switch (inBuf[i].EventType){
+
+				case FOCUS_EVENT:{ m_bConsoleInFocus = inBuf[i].Event.FocusEvent.bSetFocus; } break;
+
+				case MOUSE_EVENT:{ switch (inBuf[i].Event.MouseEvent.dwEventFlags){ case MOUSE_MOVED:{
+					m_mousePosX = inBuf[i].Event.MouseEvent.dwMousePosition.X;
+					m_mousePosY = inBuf[i].Event.MouseEvent.dwMousePosition.Y;
+				} break;
+
+				case 0:{ for (int m = 0; m < 5; m++) m_mouseNewState[m] = (inBuf[i].Event.MouseEvent.dwButtonState & (1 << m)) > 0; } break;
+
+				default: break;
+
+				}
+
+				} break;
+
+				default: break;
+			}
+		}
+
+		for (int m = 0; m < 5; m++){
+			m_mouse[m].bPressed = false;
+			m_mouse[m].bReleased = false;
+			if (m_mouseNewState[m] != m_mouseOldState[m]){
+		if (m_mouseNewState[m]){
+			m_mouse[m].bPressed = true;
+			m_mouse[m].bHeld = true;
+		} else {
+			m_mouse[m].bReleased = true;
+			m_mouse[m].bHeld = false;
+		}
+		}
+		m_mouseOldState[m] = m_mouseNewState[m];
+	}
+}
+
+} NEW_MOTOR2D;
+
+// MOTOR2D NEW_MOTOR2D;
+
+
+
+// INICIO DEL MOTOR.
+int iniciar(int W, int H, std::string TITULO = "", int FONT = 0,  int fontw = 8, int fonth = 8, bool Verificacion = 1){
+	return NEW_MOTOR2D.MOTOR2DINICIADO(0,0,W,H, TITULO, FONT, fontw, fonth, Verificacion);
+}
+
+int iniciar(int x, int y, int W, int H, std::string TITULO = "", int FONT = 0,  int fontw = 8, int fonth = 8, bool Verificacion = 1){
+	return NEW_MOTOR2D.MOTOR2DINICIADO(x,y, W,H, TITULO, FONT, fontw, fonth, Verificacion);
+}
+
+int iniciar(int x, int y, int W, int H, int A, int B, std::string TITULO = "", int FONT = 0,  int fontw = 8, int fonth = 8, bool Verificacion = 1){
+	NEW_MOTOR2D.MOTOR2DINICIADO(x,y, W,H, TITULO, FONT, fontw, fonth, Verificacion);
+	NEW_MOTOR2D.SETDIM(A,B);
+	return EXIT_SUCCESS;
+}
+// INICIO DEL MOTOR.
+
+
+
+
+void pintar(float ESPERA = 0){
+	NEW_MOTOR2D.MOTOR2DPINTAR(ESPERA);
+}
+
+void salir(){
+	NEW_MOTOR2D.MOTOR2DSALIR();
+}
+
+void espera(short int time){ Sleep(time); }
+
+// ##############################################################
 // ###################################################
 // ###################################################
 // ################ FUNCIONES DEL MOUSE# #############
 // ###################################################
 // ###################################################
 
-void Mouse_Inputs(){
-  INPUT_RECORD inBuf[32];
-  DWORD events = 0;
-  GetNumberOfConsoleInputEvents(rHnd, &events);
-  if (events > 0)
-    ReadConsoleInput(rHnd, inBuf, events, &events);
-  for (DWORD i = 0; i < events; i++){
-    switch (inBuf[i].EventType){
-      case FOCUS_EVENT:{ m_bConsoleInFocus = inBuf[i].Event.FocusEvent.bSetFocus; } break;
-      case MOUSE_EVENT:{ switch (inBuf[i].Event.MouseEvent.dwEventFlags){ case MOUSE_MOVED:{
-        m_mousePosX = inBuf[i].Event.MouseEvent.dwMousePosition.X;
-        m_mousePosY = inBuf[i].Event.MouseEvent.dwMousePosition.Y;
-      } break;
-      case 0:{ for (int m = 0; m < 5; m++) m_mouseNewState[m] = (inBuf[i].Event.MouseEvent.dwButtonState & (1 << m)) > 0; } break;
-      default: break;
-    }
-  } break;
-  default: break;
-}
-}
-for (int m = 0; m < 5; m++){
-  m_mouse[m].bPressed = false;
-  m_mouse[m].bReleased = false;
-  if (m_mouseNewState[m] != m_mouseOldState[m]){
-    if (m_mouseNewState[m]){
-      m_mouse[m].bPressed = true;
-      m_mouse[m].bHeld = true;
-    } else {
-      m_mouse[m].bReleased = true;
-      m_mouse[m].bHeld = false;
-    }
-  }
-  m_mouseOldState[m] = m_mouseNewState[m];
-}
-}
+int getmousex() { return NEW_MOTOR2D.m_mousePosX; }
+int getmousey() { return NEW_MOTOR2D.m_mousePosY; }
 
-int getmousex() { return m_mousePosX; }
-int getmousey() { return m_mousePosY; }
+int getmouseX() { return NEW_MOTOR2D.m_mousePosX; }
+int getmouseY() { return NEW_MOTOR2D.m_mousePosY; }
+
 ESTADOS_MOUSE getmouse(int nMouseButtonID) { return m_mouse[nMouseButtonID]; }
 ESTADOS_MOUSE mouse(int nMouseButtonID) { return m_mouse[nMouseButtonID]; }
-bool isfocused() { return m_bConsoleInFocus; }
-bool enfocado() { return m_bConsoleInFocus; }
+
+bool isfocused() { return NEW_MOTOR2D.m_bConsoleInFocus; }
+bool enfocado() { return NEW_MOTOR2D.m_bConsoleInFocus; }
 
 
-int mousex(){ return m_mousePosX;}
-int mousey(){ return m_mousePosY;}
+int mousex(){ return NEW_MOTOR2D.m_mousePosX;}
+int mousey(){ return NEW_MOTOR2D.m_mousePosY;}
+
+int mouseX(){ return NEW_MOTOR2D.m_mousePosX;}
+int mouseY(){ return NEW_MOTOR2D.m_mousePosY;}
+
 bool click(int nMouseButtonID = 0){
   switch(nMouseButtonID){
     case 0:{
@@ -267,7 +414,43 @@ bool izquierdo(int nMouseButtonID = 0){
   return 0;
 }
 
+bool izquierda(int nMouseButtonID = 0){
+  switch(nMouseButtonID){
+    case 0:{
+      return m_mouse[0].bPressed;
+      break;
+    }
+    case 1:{
+      return m_mouse[0].bReleased;
+      break;
+    }
+    case 2:{
+      return m_mouse[0].bHeld;
+      break;
+    }
+  }
+  return 0;
+}
+
 bool derecho(int nMouseButtonID = 0){
+  switch(nMouseButtonID){
+    case 0:{
+      return m_mouse[1].bPressed;
+      break;
+    }
+    case 1:{
+      return m_mouse[1].bReleased;
+      break;
+    }
+    case 2:{
+      return m_mouse[1].bHeld;
+      break;
+    }
+  }
+  return 0;
+}
+
+bool derecha(int nMouseButtonID = 0){
   switch(nMouseButtonID){
     case 0:{
       return m_mouse[1].bPressed;
@@ -303,107 +486,11 @@ bool medio(int nMouseButtonID = 0){
   return 0;
 }
 
-bool enfoco() { return m_bConsoleInFocus; }
-
-// ############################
-// ############################
-// ###### FUNCION LINEATO #####
-// ######### VARIABLES ########
-// ############################
-int LINEATOX = 0;
-int LINEATOY = 0;
-int LINEATO = 0;
-
-void salir();
-
-int iniciar(int W, int H, std::string TITULO = "", int FONT = 0,  int fontw = 8, int fonth = 8, bool Verificacion = 1){
-    RENDER_INICIADO = true;
-    W_RENDER_DEQ2000 = W;
-    H_RENDER_DEQ2000 = H;
-    CONSOLE_CURSOR_INFO info;
-    info.dwSize = 100;
-    info.bVisible = FALSE;
-    SetConsoleCursorInfo(wHnd, &info);
-    SetConsoleTitle((LPCSTR)TITULO.c_str());
-    char A[100];
-    sprintf(A, "@mode %d,%d", W, H);
-
-    if (!SetConsoleActiveScreenBuffer(wHnd)){
-      salir();
-    }
-
-    CONSOLE_FONT_INFOEX cfi;
-    cfi.cbSize = sizeof(cfi);
-    cfi.nFont = 0;
-    cfi.dwFontSize.X = fontw;
-    cfi.dwFontSize.Y = fonth;
-    cfi.FontFamily = FF_DONTCARE;
-    cfi.FontWeight = FW_NORMAL;
-    if(FONT==0){
-    	wcscpy_s(cfi.FaceName, L"Lucida");
-    } else {wcscpy_s(cfi.FaceName, L"Consolas");
-    }
-
-    if (!SetCurrentConsoleFontEx(wHnd, false, &cfi))
-      return 1;
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    if (!GetConsoleScreenBufferInfo(wHnd, &csbi))
-      return 1;
-
-    if(Verificacion==1){
-      if (H_RENDER_DEQ2000 > csbi.dwMaximumWindowSize.Y){
-        salir();
-      }
-
-    if (W_RENDER_DEQ2000 > csbi.dwMaximumWindowSize.X){
-      salir();
-    }
-  }
+bool enfoco() { return NEW_MOTOR2D.m_bConsoleInFocus; }
 
 
-    system(A);
 
-    windowSize = {0, 0, (short)(W-1), (short)(H-1)};
-    characterBufferSize = {(short)W, (short)H};
-    consoleWriteArea = {0, 0, (short int)(W-1), (short int)(H-1)};
-    consoleBuffer[W * H];
-    return RENDER_INICIADO;
-}
 
-void pintar(int esperar = 0){
-    if (RENDER_INICIADO){
-      if(!SetConsoleMode(rHnd, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
-        return;
-        Mouse_Inputs();
-        Sleep(esperar);
-        WriteConsoleOutputA(wHnd, consoleBuffer, characterBufferSize, characterPosition, &consoleWriteArea);
-    }
-}
-
-void salir(){
-	CloseHandle(wHnd);
-	CloseHandle(rHnd);
-}
-
-// #######################################
-// #######################################
-// ######## FUNCIONES DE TECLADO #########
-// #######################################
-// #######################################
-
-bool keydown(BYTE K){
-  if(enfoco()){
-    return GetAsyncKeyState(K) < 0;
-  }
-  return 0;
-}
-
-bool tecla(BYTE K){
-  if(enfoco()){
-    return GetAsyncKeyState(K) < 0;
-  }
-  return 0;
-}
 
 // ####################################################
 // ####################################################
@@ -411,222 +498,202 @@ bool tecla(BYTE K){
 // ####################################################
 // ####################################################
 
-// ##################################################
-// ############# BORRADO DE PANTALLA ################
-// ##################################################
 void fondo(unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-	for (int x = 0; x < W_RENDER_DEQ2000; ++x)
+	for (int i = 0; i < NEW_MOTOR2D.MOTOR2D_W*NEW_MOTOR2D.MOTOR2D_H; ++i)
 	{
-		for (int y = 0; y < H_RENDER_DEQ2000; ++y)
-		{
-			if(x>=0 && y>=0 && W_RENDER_DEQ2000>x && H_RENDER_DEQ2000>y){
-			consoleBuffer[x + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)Caracter;
-			consoleBuffer[x + W_RENDER_DEQ2000 * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
-			}
-		}
+		NEW_MOTOR2D.consoleBuffer[i].Char.AsciiChar = (unsigned char)Caracter;
+		NEW_MOTOR2D.consoleBuffer[i].Attributes = (WORD) ( (Fondo << 4) | Texto);
 	}
 }
 
 void borrar(){
-    for (int x = 0; x < W_RENDER_DEQ2000; ++x)
-    {
-        for (int y = 0; y < H_RENDER_DEQ2000; ++y)
-        {
-            if(x>=0 && y>=0 && W_RENDER_DEQ2000>x && H_RENDER_DEQ2000>y){
-            consoleBuffer[x + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)219;
-            consoleBuffer[x + W_RENDER_DEQ2000 * y].Attributes = 0;
-            }
-        }
-    }
+	for (int i = 0; i < NEW_MOTOR2D.MOTOR2D_W*NEW_MOTOR2D.MOTOR2D_H; ++i)
+	{
+		NEW_MOTOR2D.consoleBuffer[i].Char.AsciiChar = (unsigned char)219;
+		NEW_MOTOR2D.consoleBuffer[i].Attributes = 0;
+	}
 }
 
 void clear(){
-    for (int x = 0; x < W_RENDER_DEQ2000; ++x)
-    {
-        for (int y = 0; y < H_RENDER_DEQ2000; ++y)
-        {
-            if(x>=0 && y>=0 && W_RENDER_DEQ2000>x && H_RENDER_DEQ2000>y){
-            consoleBuffer[x + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)219;
-            consoleBuffer[x + W_RENDER_DEQ2000 * y].Attributes = 0;
-            }
-        }
-    }
+	for (int i = 0; i < NEW_MOTOR2D.MOTOR2D_W*NEW_MOTOR2D.MOTOR2D_H; ++i)
+	{
+		NEW_MOTOR2D.consoleBuffer[i].Char.AsciiChar = (unsigned char)219;
+		NEW_MOTOR2D.consoleBuffer[i].Attributes = 0;
+	}
 }
 
-// #######################################
-// ############ PIXELES Y MAS ############
-// #######################################
-
-void gotoxy(int x = 0, int y = 0, unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-    if(x>=0 && y>=0 && W_RENDER_DEQ2000>x && H_RENDER_DEQ2000>y){
-    consoleBuffer[x + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)Caracter;
-    consoleBuffer[x + W_RENDER_DEQ2000 * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
-    }
+void gotoxy(int x, int y, unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
+	if(x>=0 && y>=0 && NEW_MOTOR2D.MOTOR2D_W>x && NEW_MOTOR2D.MOTOR2D_H>y){
+		NEW_MOTOR2D.consoleBuffer[x + NEW_MOTOR2D.MOTOR2D_W * y].Char.AsciiChar = (char)Caracter;
+		NEW_MOTOR2D.consoleBuffer[x + NEW_MOTOR2D.MOTOR2D_W * y].Attributes = DWORD((Fondo << 4 | Texto));
+	}
 }
 
-void pixel(int x = 0, int y = 0, unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-    if(x>=0 && y>=0 && W_RENDER_DEQ2000>x && H_RENDER_DEQ2000>y){
-    consoleBuffer[x + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)Caracter;
-    consoleBuffer[x + W_RENDER_DEQ2000 * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
-    }
+void pixel(int x, int y, unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
+	if(x>=0 && y>=0 && NEW_MOTOR2D.MOTOR2D_W>x && NEW_MOTOR2D.MOTOR2D_H>y){
+		NEW_MOTOR2D.consoleBuffer[x + NEW_MOTOR2D.MOTOR2D_W * y].Char.AsciiChar = (char)Caracter;
+		NEW_MOTOR2D.consoleBuffer[x + NEW_MOTOR2D.MOTOR2D_W * y].Attributes = DWORD((Fondo << 4 | Texto));
+	}
+}
+
+int getpixelchar(int x, int y){
+	if(x>=0 && y>=0 && NEW_MOTOR2D.MOTOR2D_W>x && NEW_MOTOR2D.MOTOR2D_H>y){
+		return (int)NEW_MOTOR2D.consoleBuffer[x + y * NEW_MOTOR2D.MOTOR2D_W].Char.AsciiChar;
+	}
+	return 0;
+}
+
+int getpixelcolor(int x, int y){
+	if(x>=0 && y>=0 && NEW_MOTOR2D.MOTOR2D_W>x && NEW_MOTOR2D.MOTOR2D_H>y){
+		return (int)NEW_MOTOR2D.consoleBuffer[x + y * NEW_MOTOR2D.MOTOR2D_W].Attributes;
+	}
+	return 0;
 }
 
 void texto(int x = 0, int y = 0, std::string texto = "", unsigned int Fondo = 0, unsigned int  Texto = 15){
-  for (int i = 0; i < strlen(texto.c_str()); ++i)
-  {
-    gotoxy(i+x,y, texto[i], Fondo, Texto);
-  }
+	for (int i = 0; i < strlen(texto.c_str()); ++i)
+	{
+		gotoxy(i+x,y, texto[i], Fondo, Texto);
+	}
 }
 
 void textoalpha(int x = 0, int y = 0, std::string texto = "", unsigned int Fondo = 0, unsigned int  Texto = 15){
-  for (int i = 0; i < strlen(texto.c_str()); ++i)
-  {
-    if(texto[i]!=' '){
-        gotoxy(i+x,y, texto[i], Fondo, Texto);
-    }
-  }
+	for (int i = 0; i < strlen(texto.c_str()); ++i)
+	{
+		if(texto[i]!=' '){
+			gotoxy(i+x,y, texto[i], Fondo, Texto);
+		}
+	}
 }
 
 void textofile(int x = 0, int y = 0, std::string File = "", unsigned int Fondo = 0, unsigned int Texto = 15){
-  FILE* Archivo_Al_Leer;
-        Archivo_Al_Leer = fopen(File.c_str(), "r");
-  char caracter;
-  int avanza = 0;
-  int Volver_al_Inicio = x;
-        while((caracter=fgetc(Archivo_Al_Leer))!= EOF){
-          if (toupper(caracter)==10){
-            x =( Volver_al_Inicio - avanza );
-            y++;
-          } else {
-            if (x+avanza>=0 && y>=0 && x+avanza<=(W_RENDER_DEQ2000-1) && y<=(H_RENDER_DEQ2000-1)){
-              consoleBuffer[x+avanza + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)caracter;
-              consoleBuffer[x+avanza + W_RENDER_DEQ2000 * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
-            }
-          avanza++;
-          }
-        }
-        fclose(Archivo_Al_Leer);
+	FILE* Archivo_Al_Leer;
+	Archivo_Al_Leer = fopen(File.c_str(), "r");
+	char caracter;
+	int avanza = 0;
+	int Volver_al_Inicio = x;
+	while((caracter=fgetc(Archivo_Al_Leer))!= EOF){
+		if (toupper(caracter)==10){
+			x =( Volver_al_Inicio - avanza );
+			y++;
+		} else {
+			if (x+avanza>=0 && y>=0 && x+avanza<=(NEW_MOTOR2D.MOTOR2D_W-1) && y<=(NEW_MOTOR2D.MOTOR2D_H-1)){
+				NEW_MOTOR2D.consoleBuffer[x+avanza + NEW_MOTOR2D.MOTOR2D_W * y].Char.AsciiChar = (unsigned char)caracter;
+				NEW_MOTOR2D.consoleBuffer[x+avanza + NEW_MOTOR2D.MOTOR2D_W * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
+			}
+			avanza++;
+		}
+	}
+	fclose(Archivo_Al_Leer);
 }
 
 void textofilealpha(int x = 0, int y = 0, std::string File = "", unsigned int Fondo = 0, unsigned int Texto = 15){
-  FILE* Archivo_Al_Leer;
-        Archivo_Al_Leer = fopen(File.c_str(), "r");
-  char caracter;
-  int avanza = 0;
-  int Volver_al_Inicio = x;
-        while((caracter=fgetc(Archivo_Al_Leer))!= EOF){
-          if (toupper(caracter)==10){
-            x =( Volver_al_Inicio - avanza );
-            y++;
-          } else {
-            if (caracter!=' '){
-                if (x+avanza>=0 && y>=0 && x+avanza<=(W_RENDER_DEQ2000-1) && y<=(H_RENDER_DEQ2000-1)){
-                    consoleBuffer[x+avanza + W_RENDER_DEQ2000 * y].Char.AsciiChar = (unsigned char)caracter;
-                    consoleBuffer[x+avanza + W_RENDER_DEQ2000 * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
-                }
-            }
-          avanza++;
-          }
-        }
-        fclose(Archivo_Al_Leer);
+	FILE* Archivo_Al_Leer;
+	Archivo_Al_Leer = fopen(File.c_str(), "r");
+	char caracter;
+	int avanza = 0;
+	int Volver_al_Inicio = x;
+	while((caracter=fgetc(Archivo_Al_Leer))!= EOF){
+		if (toupper(caracter)==10){
+			x =( Volver_al_Inicio - avanza );
+			y++;
+		} else {
+			if (caracter!=' '){
+				if (x+avanza>=0 && y>=0 && x+avanza<=(NEW_MOTOR2D.MOTOR2D_W-1) && y<=(NEW_MOTOR2D.MOTOR2D_H-1)){
+					NEW_MOTOR2D.consoleBuffer[x+avanza + NEW_MOTOR2D.MOTOR2D_W * y].Char.AsciiChar = (unsigned char)caracter;
+					NEW_MOTOR2D.consoleBuffer[x+avanza + NEW_MOTOR2D.MOTOR2D_W * y].Attributes = (WORD) ( (Fondo << 4) | Texto);
+				}
+			}
+			avanza++;
+		}
+	}
+	fclose(Archivo_Al_Leer);
 }
 
 void csprite(std::vector<unsigned char> name, int x = 0, int y = 0, int ancho = 0, int alto = 0, unsigned int Fondo = 0, unsigned int Texto = 15, unsigned char Delete_Caracters='.'){
-    int Data = 0;
-    for (int i = 0; i < alto; ++i){
-        for (int o = 0; o < ancho; ++o){
-            if((char)name[Data]!=(char)Delete_Caracters)
-              gotoxy(o+x,i+y, (name[Data]), Fondo, Texto);
-            Data++;
-        }
-    }
+	int Data = 0;
+	for (int i = 0; i < alto; ++i){
+		for (int o = 0; o < ancho; ++o){
+			if((char)name[Data]!=(char)Delete_Caracters)
+				gotoxy(o+x,i+y, (name[Data]), Fondo, Texto);
+			Data++;
+		}
+	}
 }
 
-unsigned int DimencionesSprites(int &W, int &H, const std::string namefile){
-  int WB=0;
-  char linea[1024];
-  char *LW;
-  FILE *fich = fopen(namefile.c_str(), "r");
-  while(fgets(linea, 1024, (FILE*)fich)){
-    LW = linea;
-    WB=strlen(LW);
-    if(WB>W){
-      W=strlen(LW)-1;
-    }
-    H++;
-  }
-  fclose(fich);
-  return W*H;
+unsigned int dimencionessprites(int &W, int &H, std::string namefile){
+	int WB=0;
+	char linea[1024];
+	char *LW;
+	FILE *fich = fopen(namefile.c_str(), "r");
+	while(fgets(linea, 1024, (FILE*)fich)){
+		LW = linea;
+		WB=strlen(LW);
+		if(WB>W){
+			W=strlen(LW)-1;
+		}
+		H++;
+	}
+	fclose(fich);
+	return (unsigned int)(W*H);
 }
 
-void spritedq(int X, int Y, const std::string Name, int Centro){
-  char c;
-  int X_, Y_;
-  int i=0, o=0;
-  int lin=0, col=0;
-    unsigned int color=0;
-    if(Centro){ DimencionesSprites(lin,col,Name); }
-    int FX=lin/2;
-    int FY=col/2;
+void spritedeq(int X, int Y, std::string Name, int Centro){
+	char c;
+	int X_, Y_;
+	int i=0, o=0;
+	int lin=0, col=0;
+	unsigned int color=0;
+	if(Centro){ dimencionessprites(lin,col,Name.c_str()); }
+	int FX=lin/2;
+	int FY=col/2;
 
-  FILE *archivo = fopen(Name.c_str(), "r");
-  while ((c=fgetc(archivo))!= EOF){
-    if(toupper(c)=='0'){ color =  0; }
-    if(toupper(c)=='1'){ color =  1; }
-    if(toupper(c)=='2'){ color =  2; }
-    if(toupper(c)=='3'){ color =  3; }
-    if(toupper(c)=='4'){ color =  4; }
-    if(toupper(c)=='5'){ color =  5; }
-    if(toupper(c)=='6'){ color =  6; }
-    if(toupper(c)=='7'){ color =  7; }
-    if(toupper(c)=='8'){ color =  8; }
-    if(toupper(c)=='9'){ color =  9; }
-    if(toupper(c)=='A'){ color = 10; }
-    if(toupper(c)=='B'){ color = 11; }
-    if(toupper(c)=='C'){ color = 12; }
-    if(toupper(c)=='D'){ color = 13; }
-    if(toupper(c)=='E'){ color = 14; }
-    if(toupper(c)=='F'){ color = 15; }
-    if(toupper(c)==10){o+=1; i=-1;} else {
-    if(toupper(c)==32 || c==46){i=i;} else {
-        X_=i-FX;
-        Y_=o-FY;
-        pixel(X_+X,Y_+Y, 219, color, color);
-      }
-      }
-      i++;
-  }
-  i=0, o=0;
-  fclose(archivo);
+	FILE *archivo = fopen(Name.c_str(), "r");
+	while ((c=fgetc(archivo))!= EOF){
+		if(toupper(c)=='0'){ color =  0; }
+	    if(toupper(c)=='1'){ color =  1; }
+	    if(toupper(c)=='2'){ color =  2; }
+	    if(toupper(c)=='3'){ color =  3; }
+	    if(toupper(c)=='4'){ color =  4; }
+	    if(toupper(c)=='5'){ color =  5; }
+	    if(toupper(c)=='6'){ color =  6; }
+	    if(toupper(c)=='7'){ color =  7; }
+	    if(toupper(c)=='8'){ color =  8; }
+	    if(toupper(c)=='9'){ color =  9; }
+	    if(toupper(c)=='A'){ color = 10; }
+	    if(toupper(c)=='B'){ color = 11; }
+	    if(toupper(c)=='C'){ color = 12; }
+	    if(toupper(c)=='D'){ color = 13; }
+	    if(toupper(c)=='E'){ color = 14; }
+	    if(toupper(c)=='F'){ color = 15; }
+	    if(toupper(c)==10){o+=1; i=-1;} else {
+	    	if(toupper(c)==32 || c==46){i=i;} else {
+	    		X_=i-FX;
+	    		Y_=o-FY;
+	    		pixel(X_+X,Y_+Y, 219, color, color);
+	    	}
+	    }
+	    i++;
+	}
+	i=0, o=0;
+	fclose(archivo);
 }
 
 void voltear(int *a, int *b){
-  int CopA = *a;
-  int CopB = *b;
-  if (*b<*a){
-    *a = CopB;
-    *b = CopA;
-  }
-}
-
-void rectangulofill(int x = 0, int y = 0, int w = 0, int h = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  voltear(&x, &w);
-  voltear(&y, &h);
-  for (int X = x; X < w; ++X)
-  {
-    for (int Y = y; Y < h; ++Y)
-    {
-      pixel(X,Y, Caracter, Fondo, Texto);
-    }
-  }
+	int CopA = *a;
+	int CopB = *b;
+	if (*b<*a){
+		*a = CopB;
+		*b = CopA;
+	}
 }
 
 void lineax(int x = 0, int w = 0, int y = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-    voltear(&x, &w);
-    for (int i = x; i < w; ++i)
-    {
-        pixel(i,y, Caracter, Fondo, Texto);
-    }
+	voltear(&x, &w);
+	for (int i = x; i < w; ++i)
+	{
+		pixel(i,y, Caracter, Fondo, Texto);
+	}
 }
 
 void lineay(int y = 0, int h = 0, int x = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
@@ -638,186 +705,194 @@ void lineay(int y = 0, int h = 0, int x = 0, unsigned char Caracter = 219, unsig
 }
 
 void linea(int x0 = 0, int y0 = 0, int x1 = 0, int y1 = 0, unsigned char Caracter = 219, unsigned int  Fondo = 0, unsigned int Texto = 15){
-    int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
-    int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1;
-    int err = (dx>dy ? dx : -dy)/2, e2;
-    while(true){
-      if (x0>=0 && y0>=0 && x0<=(W_RENDER_DEQ2000-1) && y0<=(H_RENDER_DEQ2000-1)){
-        consoleBuffer[x0 + W_RENDER_DEQ2000 * y0].Char.AsciiChar = (unsigned char)Caracter;
-        consoleBuffer[x0 + W_RENDER_DEQ2000 * y0].Attributes = (WORD) ( (Fondo << 4) | Texto);
-      }
-      if (x0==x1 && y0==y1) break;
-      e2 = err;
-      if (e2 >-dx) { err -= dy; x0 += sx; }
-      if (e2 < dy) { err += dx; y0 += sy; }
-    }
+	int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
+	int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1;
+	int err = (dx>dy ? dx : -dy)/2, e2;
+	while(true){
+		pixel(x0,y0, Caracter, Fondo, Texto);
+		if (x0==x1 && y0==y1) break;
+		e2 = err;
+		if (e2 >-dx) { err -= dy; x0 += sx; }
+		if (e2 < dy) { err += dx; y0 += sy; }
+	}
 }
 
 void rectangulo(int X = 0, int Y = 0, int X2 = 0, int Y2 = 0, unsigned char caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  linea(X, Y, X2, Y, caracter, Fondo, Texto);
-  linea(X2,Y, X2,Y2, caracter, Fondo, Texto);
-  linea(X2,Y2, X,Y2, caracter, Fondo, Texto);
-  linea(X, Y2, X, Y, caracter, Fondo, Texto);
+	linea(X, Y, X2, Y, caracter, Fondo, Texto);
+	linea(X2,Y, X2,Y2, caracter, Fondo, Texto);
+	linea(X2,Y2, X,Y2, caracter, Fondo, Texto);
+	linea(X, Y2, X, Y, caracter, Fondo, Texto);
+}
+
+void rectangulofill(int x = 0, int y = 0, int w = 0, int h = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
+	voltear(&x, &w);
+	voltear(&y, &h);
+	for (int X = x; X < w; ++X)
+	{
+		for (int Y = y; Y < h; ++Y)
+		{
+			pixel(X,Y, Caracter, Fondo, Texto);
+		}
+	}
+	rectangulo(x,y,w,h, Caracter, Fondo, Texto);
+}
+
+void moveto(int x, int y){
+	NEW_MOTOR2D.LINEATOX = x;
+	NEW_MOTOR2D.LINEATOY = y;
 }
 
 void lineato(int x = 0, int y = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  if(LINEATO==0){
-    LINEATOX = x;
-    LINEATOY = y;
-    LINEATO = 1;
-  }
-  linea(LINEATOX,LINEATOY,x,y, Caracter, Fondo, Texto);
-  LINEATOX = x;
-  LINEATOY = y;
+	if(NEW_MOTOR2D.LINEATO==0){
+		NEW_MOTOR2D.LINEATOX = x;
+		NEW_MOTOR2D.LINEATOY = y;
+		NEW_MOTOR2D.LINEATO = 1;
+	}
+	linea(NEW_MOTOR2D.LINEATOX,NEW_MOTOR2D.LINEATOY,x,y, Caracter, Fondo, Texto);
+	NEW_MOTOR2D.LINEATOX = x;
+	NEW_MOTOR2D.LINEATOY = y;
 }
 
 void circulo(int xc = 0, int yc = 0, int r = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  int x = 0;
-  int y = r;
-  int p = 3 - 2 * r;
-  if (!r) return;
-  while (y >= x){
-  pixel(xc - x, yc - y, Caracter, Fondo, Texto);
-  pixel(xc - y, yc - x, Caracter, Fondo, Texto);
-  pixel(xc + y, yc - x, Caracter, Fondo, Texto);
-  pixel(xc + x, yc - y, Caracter, Fondo, Texto);
-  pixel(xc - x, yc + y, Caracter, Fondo, Texto);
-  pixel(xc - y, yc + x, Caracter, Fondo, Texto);
-  pixel(xc + y, yc + x, Caracter, Fondo, Texto);
-  pixel(xc + x, yc + y, Caracter, Fondo, Texto);
-  if (p < 0) p += 4 * x++ + 6;
-  else p += 4 * (x++ - y--) + 10;
-}
+	int x = 0;
+	int y = r;
+	int p = 3 - 2 * r;
+	if (!r) return;
+	while (y >= x){
+		pixel(xc - x, yc - y, Caracter, Fondo, Texto);
+		pixel(xc - y, yc - x, Caracter, Fondo, Texto);
+		pixel(xc + y, yc - x, Caracter, Fondo, Texto);
+		pixel(xc + x, yc - y, Caracter, Fondo, Texto);
+		pixel(xc - x, yc + y, Caracter, Fondo, Texto);
+		pixel(xc - y, yc + x, Caracter, Fondo, Texto);
+		pixel(xc + y, yc + x, Caracter, Fondo, Texto);
+		pixel(xc + x, yc + y, Caracter, Fondo, Texto);
+		if (p < 0) p += 4 * x++ + 6;
+		else p += 4 * (x++ - y--) + 10;
+	}
 }
 
 void circulofill(int xc = 0, int yc = 0, int r = 0, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  int x = 0;
-  int y = r;
-  int p = 3 - 2 * r;
-  if (!r) return;
-  auto drawline = [&](int sx, int ex, int ny){
-    for (int i = sx; i <= ex; i++)
-      pixel(i, ny, Caracter, Fondo, Texto);
-  };
-  while (y >= x){
-    drawline(xc - x, xc + x, yc - y);
-    drawline(xc - y, xc + y, yc - x);
-    drawline(xc - x, xc + x, yc + y);
-    drawline(xc - y, xc + y, yc + x);
-    if (p < 0) p += 4 * x++ + 6;
-    else p += 4 * (x++ - y--) + 10;
-  }
+	int x = 0;
+	int y = r;
+	int p = 3 - 2 * r;
+	if (!r) return;
+	auto drawline = [&](int sx, int ex, int ny){
+		for (int i = sx; i <= ex; i++)
+			pixel(i, ny, Caracter, Fondo, Texto);
+	};
+	while (y >= x){
+		drawline(xc - x, xc + x, yc - y);
+		drawline(xc - y, xc + y, yc - x);
+		drawline(xc - x, xc + x, yc + y);
+		drawline(xc - y, xc + y, yc + x);
+		if (p < 0) p += 4 * x++ + 6;
+		else p += 4 * (x++ - y--) + 10;
+	}
 }
 
 void ellipse(int xc = 0, int yc = 0, int rx = 0, int ry = 0, unsigned char caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-  if (rx<=1)
-    rx=1;
-  if (ry<=1)
-    ry=1;
-   float x,y,rx2,ry2,p1,p2;
-   x=0;
-   y=ry;
-   gotoxy(xc, yc+ry, caracter, Fondo, Texto);
-   gotoxy(xc, yc-ry, caracter, Fondo, Texto);
-   rx2=pow(rx,2);
-   ry2=pow(ry,2);
-   p1=ry2-(rx2*ry)+(0.25*rx2);
-   while((ry2*x)<(rx2*y))
-      {
-      if(p1<0)
-         { x++;
-           p1=p1+(2*ry2*x)+ry2;
-         }
-      else
-         {
-           x++; y--;
-           p1=p1+(2*ry2*x)-(2*rx2*y)+ry2;
-         }
-      gotoxy(xc+x,yc+y, caracter, Fondo, Texto);
-      gotoxy(xc-x,yc+y, caracter, Fondo, Texto);
-      gotoxy(xc+x,yc-y, caracter, Fondo, Texto);
-      gotoxy(xc-x,yc-y, caracter, Fondo, Texto);
-      }
-   p2=(ry2)*pow((x+0.5),2)+(rx2)*pow((y-1),2)-(rx2*ry2);
-   while(y>0)
-      {
-         if (p2>0)
-         {
-           y--;
-           p2=p2-(2*rx2*y) +rx2;
-         }
-         else
-         {
-           x++; y--;
-           p2=p2+ (2*ry2*x)-(2*rx2*y)+rx2;
-         }
-         gotoxy(xc+x,yc+y, caracter, Fondo, Texto);
-         gotoxy(xc-x,yc+y, caracter, Fondo, Texto);
-         gotoxy(xc+x,yc-y, caracter, Fondo, Texto);
-         gotoxy(xc-x,yc-y, caracter, Fondo, Texto);
+	if (rx<=1)
+		rx=1;
+	if (ry<=1)
+		ry=1;
+	float x,y,rx2,ry2,p1,p2;
+	x=0;
+	y=ry;
+	pixel(xc, yc+ry, caracter, Fondo, Texto);
+	pixel(xc, yc-ry, caracter, Fondo, Texto);
+	rx2=pow(rx,2);
+	ry2=pow(ry,2);
+	p1=ry2-(rx2*ry)+(0.25*rx2);
+	while((ry2*x)<(rx2*y))
+	{
+		if(p1<0)
+			{ x++;
+				p1=p1+(2*ry2*x)+ry2;
+			} else {
+				x++; y--;
+				p1=p1+(2*ry2*x)-(2*rx2*y)+ry2;
+			}
+			pixel(xc+x,yc+y, caracter, Fondo, Texto);
+			pixel(xc-x,yc+y, caracter, Fondo, Texto);
+			pixel(xc+x,yc-y, caracter, Fondo, Texto);
+			pixel(xc-x,yc-y, caracter, Fondo, Texto);
+		}
+		p2=(ry2)*pow((x+0.5),2)+(rx2)*pow((y-1),2)-(rx2*ry2);
+		while(y>0)
+		{
+			if (p2>0)
+			{
+				y--;
+				p2=p2-(2*rx2*y) +rx2;
+			} else {
+				x++; y--;
+				p2=p2+ (2*ry2*x)-(2*rx2*y)+rx2;
+			}
+			pixel(xc+x,yc+y, caracter, Fondo, Texto);
+	        pixel(xc-x,yc+y, caracter, Fondo, Texto);
+	        pixel(xc+x,yc-y, caracter, Fondo, Texto);
+	        pixel(xc-x,yc-y, caracter, Fondo, Texto);
       }
 }
 
 void ellipsefill(int xc = 0, int yc = 0, int rx = 0, int ry = 0, unsigned char caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 1){
-  if (rx<=1)
-    rx=1;
-  if (ry<=1)
-    ry=1;
-   float x,y,rx2,ry2,p1,p2;
-   x=0;
-   y=ry;
-  auto drawline = [&](int sx, int ex, int ny){
-    for (int i = sx; i <= ex; i++)
-      pixel(i, ny, caracter, Fondo, Texto);
-  };
-   gotoxy(xc, yc+ry, caracter, Fondo, Texto);
-   gotoxy(xc, yc-ry, caracter, Fondo, Texto);
-   rx2=pow(rx,2);
-   ry2=pow(ry,2);
-   p1=ry2-(rx2*ry)+(0.25*rx2);
-   while((ry2*x)<(rx2*y))
-      {
-      if(p1<0)
-         { x++;
-           p1=p1+(2*ry2*x)+ry2;
-         }
-      else
-         {
-           x++; y--;
-           p1=p1+(2*ry2*x)-(2*rx2*y)+ry2;
-         }
-         drawline(xc-x,xc+x,yc-y);
-         drawline(xc-x,xc+x,yc+y);
-      }
-   p2=(ry2)*pow((x+0.5),2)+(rx2)*pow((y-1),2)-(rx2*ry2);
-   while(y>0)
-      {
-         if (p2>0)
-         {
-           y--;
-           p2=p2-(2*rx2*y) +rx2;
-         }
-         else
-         {
-           x++; y--;
-           p2=p2+ (2*ry2*x)-(2*rx2*y)+rx2;
-         }
-         drawline(xc-x,xc+x,yc+y);
-         drawline(xc-x,xc+x,yc-y);
-      }
+	if (rx<=1)
+		rx=1;
+	if (ry<=1)
+		ry=1;
+	float x,y,rx2,ry2,p1,p2;
+	x=0;
+	y=ry;
+	auto drawline = [&](int sx, int ex, int ny){
+		for (int i = sx; i <= ex; i++)
+			pixel(i, ny, caracter, Fondo, Texto);
+	};
+	pixel(xc, yc+ry, caracter, Fondo, Texto);
+	pixel(xc, yc-ry, caracter, Fondo, Texto);
+	rx2=pow(rx,2);
+	ry2=pow(ry,2);
+	p1=ry2-(rx2*ry)+(0.25*rx2);
+	while((ry2*x)<(rx2*y))
+	{
+		if(p1<0)
+		{
+			x++;
+			p1=p1+(2*ry2*x)+ry2;
+		} else {
+			x++; y--;
+			p1=p1+(2*ry2*x)-(2*rx2*y)+ry2;
+		}
+		drawline(xc-x,xc+x,yc-y);
+		drawline(xc-x,xc+x,yc+y);
+	}
+	p2=(ry2)*pow((x+0.5),2)+(rx2)*pow((y-1),2)-(rx2*ry2);
+	while(y>0)
+	{
+		if (p2>0)
+		{
+			y--;
+			p2=p2-(2*rx2*y) +rx2;
+		} else {
+			x++; y--;
+			p2=p2+ (2*ry2*x)-(2*rx2*y)+rx2;
+		}
+		drawline(xc-x,xc+x,yc+y);
+		drawline(xc-x,xc+x,yc-y);
+	}
 }
 
 void polyrectangulo(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 0, int Y3 = 0, int X4 = 0, int Y4 = 0, unsigned char Caracter = 219,  unsigned int Fondo = 0,  unsigned int Texto = 15){
-  linea(X1, Y1, X2, Y2, Caracter, Fondo, Texto);
-  linea(X2, Y2, X3, Y3, Caracter, Fondo, Texto);
-  linea(X3, Y3, X4, Y4, Caracter, Fondo, Texto);
-  linea(X4, Y4, X1, Y1, Caracter, Fondo, Texto);
+	linea(X1, Y1, X2, Y2, Caracter, Fondo, Texto);
+	linea(X2, Y2, X3, Y3, Caracter, Fondo, Texto);
+	linea(X3, Y3, X4, Y4, Caracter, Fondo, Texto);
+	linea(X4, Y4, X1, Y1, Caracter, Fondo, Texto);
 }
 
 void triangulo(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 0, int Y3 = 0, unsigned char caracter = 219, unsigned int Fondo = 0,  unsigned int Texto = 15){
-  linea(X1, Y1, X2, Y2, caracter, Fondo, Texto);
-  linea(X2, Y2, X3, Y3, caracter, Fondo, Texto);
-  linea(X3, Y3, X1, Y1, caracter, Fondo, Texto);
+	linea(X1, Y1, X2, Y2, caracter, Fondo, Texto);
+	linea(X2, Y2, X3, Y3, caracter, Fondo, Texto);
+	linea(X3, Y3, X1, Y1, caracter, Fondo, Texto);
 }
 
 void triangulofill(int x1 = 0, int y1 = 0, int x2 = 0, int y2 = 0, int x3 = 0, int y3 = 0, unsigned char caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
@@ -937,19 +1012,18 @@ void triangulofill(int x1 = 0, int y1 = 0, int x2 = 0, int y2 = 0, int x3 = 0, i
 }
 
 void polytriangulo(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 0, int Y3 = 0, unsigned char caracter = 219, unsigned int Fondo = 0,  unsigned int Texto = 15){
-  linea(X1, Y1, X2, Y2, caracter, Fondo, Texto);
-  linea(X2, Y2, X3, Y3, caracter, Fondo, Texto);
-  linea(X3, Y3, X1, Y1, caracter, Fondo, Texto);
+	linea(X1, Y1, X2, Y2, caracter, Fondo, Texto);
+	linea(X2, Y2, X3, Y3, caracter, Fondo, Texto);
+	linea(X3, Y3, X1, Y1, caracter, Fondo, Texto);
 }
 
 typedef struct point{
-  int x,y;
+	int x,y;
 } point, points, punto, puntos, PUNTO, PUNTOS;
 
-
 void poligonfill(int cantidad, point *p, unsigned char Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
-    int inter[cantidad],x,y;
-    int v,xmin,ymin,xmax,ymax;
+	int inter[cantidad],x,y;
+	int v,xmin,ymin,xmax,ymax;
     int c;
     int i=cantidad;
     v=cantidad;
@@ -999,21 +1073,117 @@ void poligonfill(int cantidad, point *p, unsigned char Caracter = 219, unsigned 
             inter[c++]=x;
         }
       }
-      for(int i=0; i<c;i+=2){ lineax(inter[i],inter[i+1],s, Caracter, Fondo,Texto); }// sort(s);
+      for(i=0;i<v;i++){ linea(p[i].x-1,p[i].y,p[i+1].x,p[i+1].y, Caracter, Fondo, Texto); }
+      for(int i=0; i<c;i+=2){ lineax(inter[i],inter[i+1],s, Caracter, Fondo,Texto); }
         s++;
     }
 }
 
-void polytriangulofill(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 0, int Y3 = 0, unsigned char Caracter = 219, unsigned int Fondo = 0,  unsigned int Texto = 15){
-  point PUNTOS_[3];
-  PUNTOS_[0].x = X1;
-  PUNTOS_[0].y = Y1;
-  PUNTOS_[1].x = X2;
-  PUNTOS_[1].y = Y2;
-  PUNTOS_[2].x = X3;
-  PUNTOS_[2].y = Y3;
-  poligonfill(3, PUNTOS_, Caracter, Fondo, Texto);
+void bezier(int x1 = 0, int y1 = 0, int x2 = 0, int y2 = 0, int x3 = 0, int y3 = 0, int x4 = 0, int y4 = 0, unsigned int Caracter = 219, unsigned int Fondo = 0, unsigned int Texto = 15){
+	for(double t=0.0;t<1.0;t+=0.005)
+	{
+		double xt=pow(1-t,3)*x1+3*t*pow(1-t,2)*x2+3*pow(t,2)*(1-t)*x3+pow(t,3)*x4;
+		double yt=pow(1-t,3)*y1+3*t*pow(1-t,2)*y2+3*pow(t,2)*(1-t)*y3+pow(t,3)*y4;
+		pixel(xt,yt, Caracter, Fondo, Texto);
+	}
 }
+
+double getPt( double n1 , double n2 , float perc ){
+	double diff = n2 - n1;
+	return n1 + ( diff * perc );
+}
+
+void bezier3(int x1, int y1, int x2, int y2, int x3, int y3, unsigned int Caracter, unsigned int Fondo, unsigned int Texto){
+	float xa;
+	float ya;
+	float xb;
+	float yb;
+
+	int x;
+	int y;
+
+	for(float i=0; i<1; i+=0.001)
+	{
+		xa = getPt(x1, x2, i);
+    	ya = getPt(y1, y2, i);
+    	xb = getPt(x2, x3, i);
+   	 	yb = getPt(y2, y3, i);
+
+   	 	x = getPt( xa , xb , i );
+    	y = getPt( ya , yb , i );
+    	pixel(x, y, Caracter, Fondo, Texto);
+    }
+}
+
+void bezier4(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, unsigned int Caracter, unsigned int Fondo, unsigned int Texto){
+	float xa;
+	float ya;
+	float xb;
+	float yb;
+	float xc;
+	float yc;
+
+	float xm;
+	float ym;
+	float xn;
+	float yn;
+
+	int x;
+	int y;
+
+	for(float i=0; i<1; i+=0.001)
+	{
+		xa = getPt( x1 , x2 , i );
+    	ya = getPt( y1 , y2 , i );
+    	xb = getPt( x2 , x3 , i );
+    	yb = getPt( y2 , y3 , i );
+    	xc = getPt( x3 , x4 , i );
+    	yc = getPt( y3 , y4 , i );
+
+    	xm = getPt( xa , xb , i );
+    	ym = getPt( ya , yb , i );
+    	xn = getPt( xb , xc , i );
+    	yn = getPt( yb , yc , i );
+
+    	x = getPt( xm , xn , i );
+    	y = getPt( ym , yn , i );
+    	pixel(x, y, Caracter, Fondo, Texto);
+    }
+}
+
+void polytriangulofill(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 0, int Y3 = 0, unsigned char Caracter = 219, unsigned int Fondo = 0,  unsigned int Texto = 15){
+	point PUNTOS_[3];
+	PUNTOS_[0].x = X1;
+	PUNTOS_[0].y = Y1;
+	PUNTOS_[1].x = X2;
+	PUNTOS_[1].y = Y2;
+	PUNTOS_[2].x = X3;
+	PUNTOS_[2].y = Y3;
+	poligonfill(3, PUNTOS_, Caracter, Fondo, Texto);
+}
+
+void polyrectangulo(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, unsigned int Caracter, unsigned int Fondo, unsigned int Texto){
+	linea(x1,y1, x2, x2, Caracter, Fondo, Texto);
+	linea(x2,y2, x3, y3, Caracter, Fondo, Texto);
+	linea(x3,y3, x4, y4, Caracter, Fondo, Texto);
+	linea(x4,y4, x1, y1, Caracter, Fondo, Texto);
+}
+
+void polyrectangulofill(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, unsigned int Caracter, unsigned int Fondo, unsigned int Texto){
+	point PUNTOS_[4];
+	PUNTOS_[0].x = x1;
+	PUNTOS_[0].y = y1;
+	PUNTOS_[1].x = x2;
+	PUNTOS_[1].y = y2;
+	PUNTOS_[2].x = x3;
+	PUNTOS_[2].y = y3;
+	PUNTOS_[3].x = x4;
+	PUNTOS_[3].y = y4;
+	poligonfill(4, PUNTOS_, Caracter, Fondo, Texto);
+}
+
+
+
 
 // ##########################################################
 // ##########################################################
@@ -1021,25 +1191,54 @@ void polytriangulofill(int X1 = 0, int Y1 = 0, int X2 = 0, int Y2 = 0, int X3 = 
 // ##########################################################
 // ##########################################################
 
-void readbmp(const std::string filename, std::vector<unsigned int> *v){
-    FILE* f = fopen(filename.c_str(), "rb");
-    if(f == NULL){ printf("ERROR CON EL ARCHIVO BMP : %s\n", filename.c_str()); exit(0); }
+void readbmp(const std::string filename, std::vector<unsigned int> *Puntero_Data_BMP){
+	FILE* f = fopen(filename.c_str(), "rb");
+	if(f == NULL){ printf("ERROR CON EL ARCHIVO BMP : %s\n", filename.c_str()); exit(0); }
     unsigned char info[54];
     fread(info, sizeof(unsigned char), 54, f);
     int width = *(int*)&info[18];
     int height = *(int*)&info[22];
-    v->push_back(width);
-    v->push_back(height);
+    Puntero_Data_BMP->push_back(width);
+    Puntero_Data_BMP->push_back(height);
     int row_padded = (width*3 + 3) & (~3);
     unsigned char* data = new unsigned char[row_padded];
     unsigned char tmp;
-    for(int i = 0; i < height; i++){
-        fread(data, sizeof(unsigned char), row_padded, f);
-        for(int j = 0; j < width*3; j += 3){
-            tmp = data[j];
+    for(int i = 0; i < height; i++)
+    {
+    	fread(data, sizeof(unsigned char), row_padded, f);
+    	for(int j = 0; j < width*3; j += 3){
+    		tmp = data[j];
             data[j] = data[j+2];
             data[j+2] = tmp;
-            v->push_back(RGB(
+            Puntero_Data_BMP->push_back(RGB(
+                (int)data[j + 0],
+                (int)data[j + 1],
+                (int)data[j + 2]));
+        }
+    }
+    fclose(f);
+}
+
+void leerbmp(const std::string filename, std::vector<unsigned int> *Puntero_Data_BMP){
+	FILE* f = fopen(filename.c_str(), "rb");
+	if(f == NULL){ printf("ERROR CON EL ARCHIVO BMP : %s\n", filename.c_str()); exit(0); }
+    unsigned char info[54];
+    fread(info, sizeof(unsigned char), 54, f);
+    int width = *(int*)&info[18];
+    int height = *(int*)&info[22];
+    Puntero_Data_BMP->push_back(width);
+    Puntero_Data_BMP->push_back(height);
+    int row_padded = (width*3 + 3) & (~3);
+    unsigned char* data = new unsigned char[row_padded];
+    unsigned char tmp;
+    for(int i = 0; i < height; i++)
+    {
+    	fread(data, sizeof(unsigned char), row_padded, f);
+    	for(int j = 0; j < width*3; j += 3){
+    		tmp = data[j];
+            data[j] = data[j+2];
+            data[j+2] = tmp;
+            Puntero_Data_BMP->push_back(RGB(
                 (int)data[j + 0],
                 (int)data[j + 1],
                 (int)data[j + 2]));
@@ -1056,7 +1255,7 @@ int RGB16(COLORREF c){
     return index;
 }
 
-char Brightness(COLORREF _1){
+char brightness(COLORREF _1){
   int factor = GetRValue(_1) + GetGValue(_1) + GetBValue(_1);
   if (factor >= 602)return 176;
   if (factor >= 572)return '@';
@@ -1087,17 +1286,19 @@ bool drawbmp(std::vector<unsigned int> Datas, int x = 0, int y = 0){
             Xpos = o+x-(ANCHO/2);
             Ypos = (ALTO-i-1)+y-(ALTO/2);
 
-            pixel(Xpos,Ypos, Brightness(Datas[Index]), 0,RGB16(Datas[Index]));
+            pixel(Xpos,Ypos, brightness(Datas[Index]), 0,RGB16(Datas[Index]));
         }
     }
-
-    return 1;
+    Index = 0;
+    return EXIT_SUCCESS;
 }
 
 bool mostrarbmp(std::vector<unsigned int> Datas, int x = 0, int y = 0){
     int Index = 0, Xpos, Ypos,
     ANCHO = Datas[0],
     ALTO = Datas[1];
+
+    unsigned char R,G,B;
 
     for (int i = 0; i < ALTO; i+=1)
     {
@@ -1107,15 +1308,18 @@ bool mostrarbmp(std::vector<unsigned int> Datas, int x = 0, int y = 0){
 
             Xpos = o+x-(ANCHO/2);
             Ypos = (ALTO-i-1)+y-(ALTO/2);
+            R = GetRValue(Datas[Index]);
+            G = GetGValue(Datas[Index]);
+            B = GetBValue(Datas[Index]);
 
-            pixel(Xpos,Ypos, Brightness(Datas[Index]), 0,RGB16(Datas[Index]));
+            pixel(Xpos,Ypos, brightness(Datas[Index]), 0,RGB16(Datas[Index]));
+            // pixel(Xpos,Ypos, 219, RGB16(Datas[Index]), _RGB16BIT(R,G,B));
         }
     }
 
-    return 1;
+    return EXIT_SUCCESS;
 }
 
-// ###############################################################################
 void databmp(int *ANCHO, int *ALTO, const std::string filename, std::vector<unsigned int> *DATBMP){
   FILE* f = fopen(filename.c_str(), "rb");
   if(f == NULL){ printf("ERROR DE IMAGEN...."); return; }
@@ -1190,10 +1394,10 @@ void bmp(int posX, int posY, int ANCHO, int ALTO, std::vector<unsigned int> &Dat
       xt = A_X * cos(theta)/VueltaX - A_Y * sin(theta)/VueltaY + posX;
       yt = A_X * sin(theta)/VueltaX + A_Y * cos(theta)/VueltaY + posY;
       //
-      if (MODE>=0) lineax(xt, xt+2, yt, Brightness(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)), RGB16(RGB(R,G,B)) );
-      if (MODE>=1) lineax(xt, xt+2, yt, Brightness(RGB(R/2,G/2,B/2)), RGB16(RGB(R/2,G/2,B/2)), RGB16(RGB(R,G,B)) );
-      if (MODE>=2) lineax(xt, xt+2, yt, Brightness(RGB(R,G,B)), RGB16(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)) );
-      if (MODE>=3) lineax(xt, xt+2, yt, Brightness(RGB(R,G,B)), RGB16(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)) );
+      if (MODE>=0) lineax(xt, xt+2, yt, brightness(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)), RGB16(RGB(R,G,B)) );
+      if (MODE>=1) lineax(xt, xt+2, yt, brightness(RGB(R/2,G/2,B/2)), RGB16(RGB(R/2,G/2,B/2)), RGB16(RGB(R,G,B)) );
+      if (MODE>=2) lineax(xt, xt+2, yt, brightness(RGB(R,G,B)), RGB16(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)) );
+      if (MODE>=3) lineax(xt, xt+2, yt, brightness(RGB(R,G,B)), RGB16(RGB(R,G,B)), RGB16(RGB(R/2,G/2,B/2)) );
       if (MODE>=4) lineax(xt, xt+2, yt, 219, RGB16(RGB(R/2,G/2,B/2)), RGB16(RGB(R,G,B)) );
       }
 
@@ -1214,7 +1418,9 @@ void imagen(int x, int y, std::string FileName, int Radio_Z, int RedAncho, int R
   datasBMP.clear();
   datasBMP.shrink_to_fit();
 }
-// ###############################################################################
+
+
+
 
 
 // ##############################################################
@@ -1241,6 +1447,12 @@ std::string caracter(int n){
   return s;
 }
 
+std::string arraycaracter(char const *n){
+  char s[MAXBYTE];
+  sprintf(s,"%s",n);
+  return s;
+}
+
 int entero_s(std::string cadenas){ return atoi(cadenas.c_str()); }
 
 int entero_s_1(std::string cadenas){
@@ -1251,23 +1463,35 @@ int entero_s_1(std::string cadenas){
 
 int hexa_s(std::string cadenas){ return stoi(cadenas, nullptr, 16); }
 
+
+
+
+
 // #########################################################
 // #########################################################
 // ##################### OTRAS FUNCIONES ###################
 // #########################################################
 // #########################################################
 
-#define ctrlen(array) ( sizeof(array) / sizeof( (array)[0] ) )
+#define ctrlenmemoria(array) ( sizeof(array) / sizeof( (array)[0] ) )
+
+#define ctrlenmemory(array) ( sizeof(array) / sizeof( (array)[0] ) )
+
+int ctrlen(const char cadena[]){
+  int i=0;
+  for (i = 0; cadena[i]!='\0'; ++i){}
+  return i;
+}
 
 #define random(minimo,maximo) ( minimo + rand() / (RAND_MAX / (maximo - minimo + 1 ) + 1))
 
-int vX(){return W_RENDER_DEQ2000;}
+int vX(){return NEW_MOTOR2D.MOTOR2D_W;}
 
-int vY(){return H_RENDER_DEQ2000;}
+int vY(){return NEW_MOTOR2D.MOTOR2D_H;}
 
-int vx(){return W_RENDER_DEQ2000;}
+int vx(){return NEW_MOTOR2D.MOTOR2D_W;}
 
-int vy(){return H_RENDER_DEQ2000;}
+int vy(){return NEW_MOTOR2D.MOTOR2D_H;}
 
 void coordxy(int x, int y, unsigned int caracterX, unsigned int caracterY, unsigned int Fondo, unsigned int Texto){
   lineay(0, vy(), x, caracterY, Fondo, Texto);
@@ -1280,6 +1504,14 @@ void titulo(const std::string TITULO){
   SetConsoleTitle((LPCSTR)TITULO.c_str());
 }
 
+void title(const std::string TITULO){
+  SetConsoleTitle((LPCSTR)TITULO.c_str());
+}
+
+int distancia(int x1, int y1, int x2, int y2){
+	return sqrt(pow(x2-x1,2)+pow(y2-y1,2));
+}
+
 bool coliciones(int Ax = 0, int Ay = 0, int Aw = 0, int Ah = 0, int Bx = 0, int By = 0, int Bw = 0, int Bh = 0, bool MostrarRectangulo = false){
   bool Colisionan = false;
   if(MostrarRectangulo==true){
@@ -1290,12 +1522,23 @@ bool coliciones(int Ax = 0, int Ay = 0, int Aw = 0, int Ah = 0, int Bx = 0, int 
   return Colisionan;
 }
 
-void sonido(LPCSTR SONIDO){
-  PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_LOOP | SND_ASYNC);
-  // PlaySound(TEXT(SONIDO), NULL,  SND_ASYNC);
+void sonido(LPCSTR SONIDO, int modo = 0){
+	switch(modo){
+		case 0:{ PlaySound((LPCSTR)SONIDO, NULL, SND_ASYNC); break;}
+		case 1:{ PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_ASYNC); break;}
+		case 2:{ PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_LOOP | SND_ASYNC); break;}
+	}
 }
 
-#define sound(SONIDO) (PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_LOOP | SND_ASYNC))
+void sound(LPCSTR SONIDO, int modo = 0){
+	switch(modo){
+		case 0:{ PlaySound((LPCSTR)SONIDO, NULL, SND_ASYNC); break;}
+		case 1:{ PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_ASYNC); break;}
+		case 2:{ PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_LOOP | SND_ASYNC); break;}
+	}
+}
+
+// #define sound(SONIDO) (PlaySound((LPCSTR)SONIDO, NULL, SND_FILENAME | SND_LOOP | SND_ASYNC))
 
 float angulo(float X, float Y){ return (float)atan2(Y, X); }
 
@@ -1313,6 +1556,25 @@ void rota(float& x, float& y, float cx, float cy, float da) {
   x = r * cos(a) + cx;
   y = r * sin(a) + cy;
 }
+
+bool keydown(BYTE K){
+  if(enfoco()){
+    return GetAsyncKeyState(K) < 0;
+  }
+  return 0;
+}
+
+bool onoff(int vkey) { return GetKeyState(vkey) > 0; }
+
+bool tecla(BYTE K){
+  if(enfoco()){
+    return GetAsyncKeyState(K) < 0;
+  }
+  return 0;
+}
+
+
+
 
 // ##########################################################
 // ##########################################################
@@ -1346,6 +1608,10 @@ auto llamartiempo = [](std::string name, auto&& func, int ModoMostrar = 0) {
     return RENDER_FPS;
 };
 
+
+
+
+
 // ##################################################################
 // ##################################################################
 // ####################### CREACION DE BITS #########################
@@ -1378,7 +1644,314 @@ void crearimagen(const std::string path, const int width, const int height, cons
     delete[] img;
 }
 
+
+
+
+// ##################################################################
+// ##################################################################
+// ############################ SONIDOS #############################
+// ##################################################################
+// ##################################################################
+
+float frequenciasonido(const float *FREQ, const float Tiempos[], unsigned int Repetir = 1){
+  // Tambien puede ser: sizeof(FREQ) * 2 + 1;
+  int TIME = sizeof(FREQ) + sizeof(FREQ) + 1;
+  iniciartiempo();
+  for (int i = 1; i <= Repetir; ++i){
+    for (int o = 0; o < TIME; ++o)
+    {
+      Beep((DWORD)FREQ[o], (DWORD)Tiempos[o]);
+    }
+  }
+  finaltiempo();
+  return mostrartiempo();
+}
+
+
+
+
+
+// ##################################################################
+// ##################################################################
+// ##################### ALGUNAS FUNCIONES DE OLC ###################
+// ##################################################################
+// ##################################################################
+
+enum COLOUR
+{
+  FG_BLACK    = 0x0000,
+  FG_DARK_BLUE    = 0x0001,
+  FG_DARK_GREEN   = 0x0002,
+  FG_DARK_CYAN    = 0x0003,
+  FG_DARK_RED     = 0x0004,
+  FG_DARK_MAGENTA = 0x0005,
+  FG_DARK_YELLOW  = 0x0006,
+  FG_GREY     = 0x0007,
+  FG_DARK_GREY    = 0x0008,
+  FG_BLUE     = 0x0009,
+  FG_GREEN    = 0x000A,
+  FG_CYAN     = 0x000B,
+  FG_RED      = 0x000C,
+  FG_MAGENTA    = 0x000D,
+  FG_YELLOW   = 0x000E,
+  FG_WHITE    = 0x000F,
+  BG_BLACK    = 0x0000,
+  BG_DARK_BLUE  = 0x0010,
+  BG_DARK_GREEN = 0x0020,
+  BG_DARK_CYAN  = 0x0030,
+  BG_DARK_RED   = 0x0040,
+  BG_DARK_MAGENTA = 0x0050,
+  BG_DARK_YELLOW  = 0x0060,
+  BG_GREY     = 0x0070,
+  BG_DARK_GREY  = 0x0080,
+  BG_BLUE     = 0x0090,
+  BG_GREEN    = 0x00A0,
+  BG_CYAN     = 0x00B0,
+  BG_RED      = 0x00C0,
+  BG_MAGENTA    = 0x00D0,
+  BG_YELLOW   = 0x00E0,
+  BG_WHITE    = 0x00F0,
+};
+
+enum PIXEL_TYPE
+{
+  PIXEL_SOLID = 219,
+  PIXEL_THREEQUARTERS = 178,
+  PIXEL_HALF = 177,
+  PIXEL_QUARTER = 176,
+};
+
+class olcSprite
+{
+public:
+  olcSprite()
+  {
+
+  }
+
+  olcSprite(int w, int h)
+  {
+    Create(w, h);
+  }
+
+  olcSprite(std::wstring sFile)
+  {
+    if (!Load(sFile))
+      Create(8, 8);
+  }
+
+  int nWidth = 0;
+  int nHeight = 0;
+
+private:
+  short *m_Glyphs = nullptr;
+  short *m_Colours = nullptr;
+
+  void Create(int w, int h)
+  {
+    nWidth = w;
+    nHeight = h;
+    m_Glyphs = new short[w*h];
+    m_Colours = new short[w*h];
+    for (int i = 0; i < w*h; i++)
+    {
+      m_Glyphs[i] = L' ';
+      m_Colours[i] = FG_BLACK;
+    }
+  }
+
+public:
+  void SetGlyph(int x, int y, short c)
+  {
+    if (x <0 || x >= nWidth || y < 0 || y >= nHeight)
+      return;
+    else
+      m_Glyphs[y * nWidth + x] = c;
+  }
+
+  void SetColour(int x, int y, short c)
+  {
+    if (x <0 || x >= nWidth || y < 0 || y >= nHeight)
+      return;
+    else
+      m_Colours[y * nWidth + x] = c;
+  }
+
+  short GetGlyph(int x, int y)
+  {
+    if (x <0 || x >= nWidth || y < 0 || y >= nHeight)
+      return L' ';
+    else
+      return m_Glyphs[y * nWidth + x];
+  }
+
+  short GetColour(int x, int y)
+  {
+    if (x <0 || x >= nWidth || y < 0 || y >= nHeight)
+      return FG_BLACK;
+    else
+      return m_Colours[y * nWidth + x];
+  }
+
+  short SampleGlyph(float x, float y)
+  {
+    int sx = (int)(x * (float)nWidth);
+    int sy = (int)(y * (float)nHeight-1.0f);
+    if (sx <0 || sx >= nWidth || sy < 0 || sy >= nHeight)
+      return L' ';
+    else
+      return m_Glyphs[sy * nWidth + sx];
+  }
+
+  short SampleColour(float x, float y)
+  {
+    int sx = (int)(x * (float)nWidth);
+    int sy = (int)(y * (float)nHeight-1.0f);
+    if (sx <0 || sx >= nWidth || sy < 0 || sy >= nHeight)
+      return FG_BLACK;
+    else
+      return m_Colours[sy * nWidth + sx];
+  }
+
+  bool Save(std::wstring sFile)
+  {
+    FILE *f = nullptr;
+    _wfopen_s(&f, sFile.c_str(), L"wb");
+    if (f == nullptr)
+      return false;
+
+    fwrite(&nWidth, sizeof(int), 1, f);
+    fwrite(&nHeight, sizeof(int), 1, f);
+    fwrite(m_Colours, sizeof(short), nWidth * nHeight, f);
+    fwrite(m_Glyphs, sizeof(short), nWidth * nHeight, f);
+
+    fclose(f);
+
+    return true;
+  }
+
+  bool Load(std::wstring sFile)
+  {
+    delete[] m_Glyphs;
+    delete[] m_Colours;
+    nWidth = 0;
+    nHeight = 0;
+
+    FILE *f = nullptr;
+    _wfopen_s(&f, sFile.c_str(), L"rb");
+    if (f == nullptr)
+      return false;
+
+    std::fread(&nWidth, sizeof(int), 1, f);
+    std::fread(&nHeight, sizeof(int), 1, f);
+
+    Create(nWidth, nHeight);
+
+    std::fread(m_Colours, sizeof(short), nWidth * nHeight, f);
+    std::fread(m_Glyphs, sizeof(short), nWidth * nHeight, f);
+
+    std::fclose(f);
+    return true;
+  }
+};
+
+void DrawSprite(int x, int y, olcSprite *sprite){
+  if (sprite == nullptr) return;
+
+  for (int i = 0; i < sprite->nWidth; i++){
+    for (int j = 0; j < sprite->nHeight; j++){
+      if (sprite->GetGlyph(i, j) != L' ')
+        pixel(x + i, y + j, 219,  sprite->GetColour(i, j)/2,sprite->GetColour(i, j));
+    }
+  }
+}
+
+void DrawPartialSprite(int x, int y, olcSprite *sprite, int ox, int oy, int w, int h){
+  if (sprite == nullptr) return;
+
+  for (int i = 0; i < w; i++){
+    for (int j = 0; j < h; j++){
+      if (sprite->GetGlyph(i+ox, j+oy) != L' ')
+        pixel(x + i, y + j, 219, sprite->GetColour(i, j)/2, sprite->GetColour(i+ox, j+oy));
+    }
+  }
+}
+
+
+
+
+
+
+// ############################################################
+// ############################################################
+// #################### INVERTIR DE COLORES ###################
+// ############################################################
+// ############################################################
+
+void invert_linea(int x0 = 0, int y0 = 0, int x1 = 0, int y1 = 0){
+	int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
+	int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1;
+	int err = (dx>dy ? dx : -dy)/2, e2;
+	while(true){
+		pixel(x0,y0, (getpixelchar(x0,y0)), 0, (15-getpixelcolor(x0,y0)));
+		if (x0==x1 && y0==y1) break;
+		e2 = err;
+		if (e2 >-dx) { err -= dy; x0 += sx; }
+		if (e2 < dy) { err += dx; y0 += sy; }
+	}
+}
+
+void invert_rectangulo(int X = 0, int Y = 0, int X2 = 0, int Y2 = 0){
+	voltear(&X,&X2);
+	voltear(&Y,&Y2);
+	invert_linea(X, Y, X2, Y);
+	invert_linea(X2,Y+1, X2,Y2-1);
+	invert_linea(X2,Y2, X,Y2);
+	invert_linea(X, Y2-1, X, Y+1);
+}
+
+void invert_rectangulofill(int x = 0, int y = 0, int w = 0, int h = 0){
+	voltear(&x, &w);
+	voltear(&y, &h);
+	for (int X = x+1; X < w; ++X)
+	{
+		for (int Y = y+1; Y < h; ++Y)
+		{
+			pixel(X,Y, (getpixelchar(X,Y)), 0, (15-getpixelcolor(X,Y)));
+		}
+	}
+	invert_rectangulo(x,y,w,h);
+}
+
+void invert_lineax(int x = 0, int w = 0, int y = 0){
+	voltear(&x, &w);
+	for (int i = x; i < w; ++i)
+	{
+		pixel(i,y, (getpixelchar(i,y)), 0, (getpixelcolor(i,y)));
+	}
+}
+
+void invert_lineay(int y = 0, int h = 0, int x = 0){
+    voltear(&y, &h);
+    for (int i = y; i < h; ++i)
+    {
+        pixel(x,i, (getpixelchar(x,i)), 0, (getpixelcolor(x,i)));
+    }
+}
+
+void invert_bezier(int x1 = 0, int y1 = 0, int x2 = 0, int y2 = 0, int x3 = 0, int y3 = 0, int x4 = 0, int y4 = 0){
+	for(double t=0.0;t<1.0;t+=0.005)
+	{
+		double xt=pow(1-t,3)*x1+3*t*pow(1-t,2)*x2+3*pow(t,2)*(1-t)*x3+pow(t,3)*x4;
+		double yt=pow(1-t,3)*y1+3*t*pow(1-t,2)*y2+3*pow(t,2)*(1-t)*y3+pow(t,3)*y4;
+		pixel(xt,yt, (getpixelchar(xt,yt)), 0, (getpixelcolor(xt,yt)));
+	}
+}
+
+
+
 #endif // __dartxt_h__
+
 
 
 
@@ -1462,19 +2035,3 @@ void crearimagen(const std::string path, const int width, const int height, cons
 // ..********.........<<<</<<</////*****************..........//<</</.......▒▒▒▒▒▒▒***.*........▒▒▒▒▒▒.▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒ç
 // ***.**...***.......//<<<<<<//*\*****************...........***......▒.▒.▒▒▒▒▒..//**..*......▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 // ****.*..*..........**</<<<<</*//***************.......▒.....*...*......▒...▒...▒▒<0%?<***.....▒▒▒▒▒..▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
