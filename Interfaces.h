@@ -10,16 +10,16 @@
         std::string puntos = my_itos(puntaje);
 
         ///BORDES
-            //bordes área de juego
-            _lineay(0, _H - 6, 0, '°', 7, 11);//borde lateral izquierdo
-            _lineax(0, _W - 1, _H - 7, '°', 7, 11);//borde inferior
-            _lineay(_W - 1, _H - 6, 0, '°', 7, 11);//borde lateral derecho
-            _lineax(0, _W - 1, 0, '°', 7, 11);//borde superior
+            //bordes Ã¡rea de juego
+            _lineay(0, _H - 6, 0, 'Â°', 7, 11);//borde lateral izquierdo
+            _lineax(0, _W - 1, _H - 7, 'Â°', 7, 11);//borde inferior
+            _lineay(_W - 1, _H - 6, 0, 'Â°', 7, 11);//borde lateral derecho
+            _lineax(0, _W - 1, 0, 'Â°', 7, 11);//borde superior
 
             //bordes GUI
-            _lineax(_W - 1, 30, 0, '°', 7, 11);//borde superior
-            _lineax(_W - 1, 30, _H - 7, '°', 7, 11);//borde inferior
-            _lineay(_W - 1 + 30, _H - 6, 0, '°', 7, 11);//borde lateral derecho
+            _lineax(_W - 1, 30, 0, 'Â°', 7, 11);//borde superior
+            _lineax(_W - 1, 30, _H - 7, 'Â°', 7, 11);//borde inferior
+            _lineay(_W - 1 + 30, _H - 6, 0, 'Â°', 7, 11);//borde lateral derecho
         ///FIN BORDES
 
         ///CONTROLES
@@ -34,10 +34,10 @@
 
         ///SIGUIENTE PIEZA
             texto(_W - 1 + 30 - 23, 3, "SIGUIENTE PIEZA", 0, 3);
-            _lineay(_W - 1 + 30 - 20, 8, 6, '°', 7, 11);//borde lateral izquierdo
-            _lineax(_W - 1 + 30 - 20, 9, 6, '°', 7, 11);//borde superior
-            _lineay(_W - 1 + 30 - 12, 8, 6, '°', 7, 11);//borde lateral derecho
-            _lineax(_W - 1 + 30 - 20, 9, 13, '°', 7, 11);//borde inferior
+            _lineay(_W - 1 + 30 - 20, 8, 6, 'Â°', 7, 11);//borde lateral izquierdo
+            _lineax(_W - 1 + 30 - 20, 9, 6, 'Â°', 7, 11);//borde superior
+            _lineay(_W - 1 + 30 - 12, 8, 6, 'Â°', 7, 11);//borde lateral derecho
+            _lineax(_W - 1 + 30 - 20, 9, 13, 'Â°', 7, 11);//borde inferior
 
                 //pintar pieza dentro del recuadro
 
@@ -67,10 +67,10 @@
 
         oscurecer_pantalla();
 
-        _lineax(0, 45, 0, '°', 7, 11);//borde superior
-        _lineax(0, 45, 25, '°', 7, 11);//borde inferior
-        _lineay(0, 25, 0, '°', 7, 11);//borde lateral izquierdo
-        _lineay(45, 26, 0, '°', 7, 11);//borde lateral derecho
+        _lineax(0, 45, 0, 'Â°', 7, 11);//borde superior
+        _lineax(0, 45, 25, 'Â°', 7, 11);//borde inferior
+        _lineay(0, 25, 0, 'Â°', 7, 11);//borde lateral izquierdo
+        _lineay(45, 26, 0, 'Â°', 7, 11);//borde lateral derecho
 
                 texto(15, 3, "FIN DEL JUEGO", 0, 3);
             texto(12, 5, "Tu puntaje fue de: " + my_itos(puntaje), 0, 3);
@@ -98,10 +98,10 @@
 
             oscurecer_pantalla();
 
-        _lineax(0, 45, 0, '°', 7, 11);//borde superior
-        _lineax(0, 45, 25, '°', 7, 11);//borde inferior
-        _lineay(0, 25, 0, '°', 7, 11);//borde lateral izquierdo
-        _lineay(45, 26, 0, '°', 7, 11);//borde lateral derecho
+        _lineax(0, 45, 0, 'Â°', 7, 11);//borde superior
+        _lineax(0, 45, 25, 'Â°', 7, 11);//borde inferior
+        _lineay(0, 25, 0, 'Â°', 7, 11);//borde lateral izquierdo
+        _lineay(45, 26, 0, 'Â°', 7, 11);//borde lateral derecho
 
         texto(8, 3, "***Tabla de puntuaciones***", 0, 3);
 
@@ -136,6 +136,12 @@
                     mostrar_tabla(0);
                     pintar(10);
                 }
+                else if(letra == 8 && i > 0){
+                    jugadores[0].nombre.at(i - 1) = '-';
+                    i--;
+                    mostrar_tabla(0);
+                    pintar(10);
+                }
             }
              Sleep(1000);
                 break;
@@ -156,10 +162,14 @@
 
                     pintar(10);
                 }
-
-                Sleep(1000);
-
+                else if(letra == 8 && i > 0){
+                    jugadores[pos].nombre.at(i - 1) = '-';
+                    i--;
+                    mostrar_tabla(pos);
+                    pintar(10);
+                }
             }
+            Sleep(1000);
 
         }
 
