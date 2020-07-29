@@ -32,9 +32,10 @@
     void pantalla_puntuaciones();//tabla de puntuaciones (el podio)
 
 
-    std::string my_itos(int num){
+    std::string my_itos(int num){//convertir un entero a cadena
         std::string cad_aux, cad_definitiva;
         int aux;
+        if(num == 0) return '0';//si el número es igual a cero devolvemos el caracter '0' ya que la función no lo va a devolver por si misma
 
         while(num != 0){
             aux = num % 10;
@@ -93,36 +94,42 @@
        int cont(0);
        jugador tmp;
 
-       if(J.puntuacion < jugadores[9].puntuacion)
+       if(J.puntuacion < jugadores[9].puntuacion)//La puntuación no puede ser menor al último
+            return -1;
+        
+        if(jugadores[cont].puntuacion == J.puntuacion)//La puntuación no puede ser igual a alguna que ya esté en la lista
             return -1;
 
-        while(J.puntuacion < jugadores[cont].puntuacion)
-            cont++;
-
+        ///EMPEZAR ORDENAMIENTO
+        
+        while(J.puntuacion < jugadores[cont].puntuacion)//buscar la posición donde sea mayor que el elemento que le sigue en la lista
+            cont++;                                     //y menor que el que le antecede
+        
+       
                 tmp = jugadores[cont];
-            for(int i = cont + 1; i < 10 - 1; i++){
-                jugadores[i] = tmp;
+            for(int i = cont + 1; i < 10 - 1; i++){//acomodamos la lista para que nuestro nuevo puntaje quede en su posición
+                jugadores[i] = tmp;                //corriendo hacia abajo los elementos menores en puntaje
                 tmp = jugadores[i + 1];
             }
 
 
-        jugadores[cont] = J;
+        jugadores[cont] = J;//luego de acomodada la lista colocamos el jugador en su lugar
 
-        return cont;
+        return cont;//retornamos la posición de la lista
     }
 
     void mostrar_tabla(int pos){
-        int linea = 4;
-        std::string puntos;
-        std::string flecha("   ");
-        int color(0);
+        int linea = 4;//comienzo de la tabla en pantalla (eje y)
+        std::string puntos;//cadena con el puntaje (en numeros)
+        std::string flecha("   ");//flecha que señala la posición de el puntaje de el jugador (si logró aparecer en la tabla)
+        int color(0);//color de la linea en la tabla
         for(int i = 0; i < 10; i++){
 
-            if(pos != -1){
-                i == pos ? color = 14 : color = 15;
-                i == pos ? flecha = "-> " : flecha = "   ";
+            if(pos != -1){//si el jugador estuvo en la tabla
+                i == pos ? color = 14 : color = 15; //si el iterador es igual a la posición pintamos la linea de amarillo
+                i == pos ? flecha = "-> " : flecha = "   ";//si el iterador es igual a la posición agregamos una flecha a la izquierda
             }
-            jugadores[i].puntuacion == 0 ? puntos = '0' : puntos = my_itos(jugadores[i].puntuacion);
+             puntos = my_itos(jugadores[i].puntuacion);
 
             texto(4, linea += 1, flecha + jugadores[i].nombre + "............" + puntos, 0, color);
         }
